@@ -9,22 +9,21 @@
 DMENU="rofi -dmenu -width 30 -i "
 
 function sendMsg() {
-    notify-send "Dmenu Scrcpy" "$1"
+    notify-send "droidapps" "$1"
 }
 
 function getDevices() {
     amount=$(adb devices | awk '(NR > 1 && NF > 0) {print $1}' | wc -l)
 
-    if (($amount < 2)); then
-        adb get-serialno
-    else
+    if (($amount > 1)); then
         adb devices | awk '(NR > 1 && NF > 0) {print $1}' | $DMENU
+    else
+        adb get-serialno
     fi
-
 }
 
 function getDisplayId() {
-    adb -s $1 shell dumpsys display | grep mDisplayId | cut -d = -f 2 | $DMENU -mesg "Select display id" -lines 4 -p Display
+    adb -s $1 shell dumpsys display | grep mDisplayId | cut -d = -f 2 | $DMENU -mesg "Select display id" -lines 4 -p Display || exit
 }
 
 function getPackage() {
@@ -32,19 +31,25 @@ function getPackage() {
     if [ -z "${package}" ]; then
         sendMsg "No package selected"
     else
-        activity=$(adb -s $1 shell dumpsys package $package | awk '/android.intent.action.MAIN:/{getline;print $2}')
-        echo $activity
+        adb -s $1 shell dumpsys package $package | awk '/android.intent.action.MAIN:/{getline;print $2}'
     fi
 
 }
 
 function startApps() {
     devices=$(getDevices)
-    displayId=$(getDisplayId $devices)
-    activity=$(getPackage $devices)
+    if [ -n "${devices}" ]; then
+        displayId=$(getDisplayId $devices)
+        activity=$(getPackage $devices)
+        if [ -n "${displayId}" ] && [ -n "${activity}" ]; then
+            adb -s $devices shell am start -n $activity --display $displayId
+            scrcpy -s $devices --display $displayId
+        fi
+    else
 
-    adb -s $devices shell am start -n $activity --display $displayId
-    scrcpy -s $devices --display $displayId
+        sendMsg "no devices/emulators found"
+    fi
+
 }
 
 startApps
